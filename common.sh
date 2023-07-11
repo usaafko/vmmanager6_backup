@@ -4,6 +4,7 @@
 VM_URL='https://172.31.49.33'
 VM_LOGIN='admin@example.com'
 VM_PASS='q1w2e3'
+VM_IP='172.31.49.33'
 BACKUP_LOCATION='/backup'
 post() {
 	data="$1"

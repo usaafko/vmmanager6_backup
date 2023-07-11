@@ -38,6 +38,8 @@ else
 	backup_type='raw'
 fi
 
+pprint "Saving backup config"
+echo $backup_json | jq '. + {type: "'$backup_type'"}' > ${BACKUP_LOCATION}/${backup_name}_config.json
 
 pprint "Copy $backup_name file to backup location"
 cp -f ${backup_file}.${backup_type}.zst $BACKUP_LOCATION/${backup_name}.zst

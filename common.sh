@@ -31,7 +31,7 @@ perror() {
         echo -e "===> $(date) ${RED}${1}${NC}"
 }
 check_err() {
-	if echo $1 | grep -q error; then
+	if echo $1 | grep -q '"error"'; then
 		perror "Request failed with error: $1"
 		exit 1
 	fi

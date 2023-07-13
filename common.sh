@@ -52,6 +52,15 @@ if [ -z "$1" ]; then
 	usage
 	exit
 fi	
+if [ "x$1" = "x--help" ] || [ "x$1" = "x-h" ]; then
+	usage
+	exit
+fi
+# We need jq to work with json
+# We need curl to work with API
+test -f /usr/bin/which || apt-get -y install which
+which jq >/dev/null 2>/dev/null || apt-get -y install jq
+which curl >/dev/null 2>/dev/null || apt-get -y install curl
 
 pprint "Get auth token"
 

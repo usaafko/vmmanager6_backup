@@ -1,11 +1,12 @@
 #!/bin/bash
+###
+### Common functions for backup\restore script
+### AO Exo-soft 2023 
+### Author: Kalinichenko Ilya 
+### mailto: i.kalinichenko@ispsystem.com
+###
 
-
-VM_URL='https://172.31.49.33'
-VM_LOGIN='admin@example.com'
-VM_PASS='q1w2e3'
-VM_IP='172.31.49.33'
-BACKUP_LOCATION='/backup'
+. ./vars.sh
 post() {
 	data="$1"
 	if [ -n "$3" ]; then
@@ -36,15 +37,35 @@ check_err() {
 		exit 1
 	fi
 }
+usage() {
+	cat << EOF 
+Usage:
+	Please fill variables in env.sh
+	To restore backups when VM or backup is deleted configure SSH access from node to VMmanager master
+
+	restore.sh [backup name] Start restoring of backup
+	backup.sh [vm id] Start backuping VM with VMmanager id
+
+EOF
+}
+if [ -z "$1" ]; then
+	usage
+	exit
+fi	
+
 pprint "Get auth token"
 
 token_json=$(post '{"email": "'$VM_LOGIN'", "password": "'$VM_PASS'"}' 'auth/v4/public/token')
-
+first_login=1
 while echo $token_json | grep -q error 
 do
-	perror "Can't login, do another try"
+	if [ "$first_login" -gt 1 ]; then
+		perror "Can't login, do another try"
+	fi
 	sleep 5
 	token_json=$(post '{"email": "'$VM_LOGIN'", "password": "'$VM_PASS'"}' 'auth/v4/public/token')
+	first_login=2
 done 
 	
 token=$(echo $token_json | jq -r '.token')
+

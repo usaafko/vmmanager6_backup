@@ -1,4 +1,10 @@
 #!/bin/bash
+###
+### Restore script for VMmanager 6
+### AO Exo-soft 2023 
+### Author: Kalinichenko Ilya 
+### mailto: i.kalinichenko@ispsystem.com
+###
 
 . ./common.sh
 
@@ -26,40 +32,40 @@ ask_existing() {
 restore_existing() {
 	if [ -z "$mysql_pass" ]; then
 		pprint "Getting master configuration"
-		VM_CONFIG=$(ssh  root@$VM_IP cat /opt/ispsystem/vm/config.json)
+		VM_CONFIG=$(ssh -t root@$VM_IP cat /opt/ispsystem/vm/config.json)
 		mysql_pass=$(echo $VM_CONFIG | jq -r '.MysqlRootPassword')
 	fi
-	backup_id=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.id') 
-	backup_name=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.name') 
-	backup_os=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.os') 
-	backup_expand=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.expand_part') 
-	backup_ipauto=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.ip_automation') 
-	backup_parent=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.parent_disk') 
+	backup_id=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.id') 
+	backup_name=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.name') 
+	backup_os=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.os') 
+	backup_expand=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.expand_part') 
+	backup_ipauto=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.ip_automation') 
+	backup_parent=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.parent_disk') 
 	backup_disk_id=$backup_parent
-	backup_estimated=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.estimated_size_mib') 
-	backup_actualsize=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.actual_size_mib') 
-	backup_node=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.node') 
-	backup_internalname=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.internal_name') 
-	backup_state=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.state') 
-	backup_datecreate=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq -r '.date_create') 
+	backup_estimated=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.estimated_size_mib') 
+	backup_actualsize=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.actual_size_mib') 
+	backup_node=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.node') 
+	backup_internalname=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.internal_name') 
+	backup_state=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.state') 
+	backup_datecreate=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.date_create') 
 	pprint "Adding backup to VMmanager database..."
-	ssh root@$VM_IP << DOCKER_EOF
+	ssh root@$VM_IP /bin/bash << DOCKER_EOF
 docker exec -i mysql bash << EOF
-mysql isp -p$mysql_pass -e "replace into vm_disk_backup(id,name,os,expand_part,ip_automation,parent_disk,estimated_size_mib,actual_size_mib,node,backup_location,schedule,internal_name,state,comment,date_create,available_until) value ($backup_id,'$backup_name',$backup_os,'$backup_expand','$backup_ipauto',$backup_parent,$backup_estimated,$backup_actualsize,$backup_node,null,null,'$backup_internalname','$backup_state','','$backup_datecreate',null)"
+MYSQL_PWD=$mysql_pass mysql isp -e "replace into vm_disk_backup(id,name,os,expand_part,ip_automation,parent_disk,estimated_size_mib,actual_size_mib,node,backup_location,schedule,internal_name,state,comment,date_create,available_until) value ($backup_id,'$backup_name',$backup_os,'$backup_expand','$backup_ipauto',$backup_parent,$backup_estimated,$backup_actualsize,$backup_node,null,null,'$backup_internalname','$backup_state','','$backup_datecreate',null)"
 EOF
 DOCKER_EOF
 	pprint "Move local backup to VMmanager storage"
-	backup_type=$(cat "$BACKUP_LOCATION/${RESTORE_VM}_config.json" | jq -r '.type')
-        backup_path=$(cat "$BACKUP_LOCATION/${RESTORE_VM}_config.json" | jq -r '.list[-1]|.cluster.image_storage_path')	
-	cp $BACKUP_LOCATION/${RESTORE_VM}.zst $backup_path/${RESTORE_VM}_backup.${backup_type}.zst
+	backup_type=$(cat "$BACKUP_LOCATION/${RESTORE_VM}/backup_host.json" | jq -r '.type')
+        backup_path=$(cat "$BACKUP_LOCATION/${RESTORE_VM}/backup_host.json" | jq -r '.list[-1]|.cluster.image_storage_path')	
+	cp $BACKUP_LOCATION/${RESTORE_VM}/disk.zst $backup_path/${RESTORE_VM}_backup.${backup_type}.zst
 	restore_vm_backup
 }
 restore_missed() {
 	pprint "Getting master configuration"
-	VM_CONFIG=$(ssh  root@$VM_IP cat /opt/ispsystem/vm/config.json)
+	VM_CONFIG=$(ssh -t root@$VM_IP cat /opt/ispsystem/vm/config.json)
 	mysql_pass=$(echo $VM_CONFIG | jq -r '.MysqlRootPassword')
-	vm_ip=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.ipv4[0].ip_addr')
-	vm_ip_pool=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.ipv4[0].ippool_id')
+	vm_ip=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.ipv4[0].ip_addr')
+	vm_ip_pool=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.ipv4[0].ippool_id')
 	pprint "Check if IP address $vm_ip is busy"
 	check_ip=$(get $token "ip/v3/ip?where=name%20EQ%20%27${vm_ip}%27")
 	check_err "$check_ip"
@@ -75,15 +81,16 @@ restore_missed() {
 		esac
 	fi
 	pprint "Address is ready to use"
-	vm_name=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.name')
-	vm_os=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.os.id')
+	vm_name=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.name')
+	vm_os=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.os.id')
 	vm_pass=$(pwgen -s 20 -1)
-	vm_cluster=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.cluster.id')
-	vm_preset=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.preset')
-	vm_node=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.node.id')
-	vm_disk=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.disks[0].size_mib')
-	vm_user=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.account.id')
-	vm_domain=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json | jq -r '.metadata.domain')
+	vm_cluster=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.cluster.id')
+	vm_preset=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.preset')
+	vm_node=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.node.id')
+	vm_disk=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.disks[0].size_mib')
+	vm_disk_storage=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.disks[0].storage.id')
+	vm_user=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.account.id')
+	vm_domain=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.domain')
 	new_vm_json=$(mktemp /tmp/newvmXXXXX)
 	cat << EOF > $new_vm_json
 {
@@ -99,6 +106,7 @@ restore_missed() {
                     {
                         "size_mib": $vm_disk,
                         "boot_order": 1,
+			"storage": $vm_disk_storage,
                         "tags":
                         []
                     }
@@ -137,11 +145,11 @@ EOF
 	done
 	new_metadata=$(get $token "vm/v3/host/$vm_id/metadata")
 	check_err "$new_metadata"
-	echo $new_metadata > $BACKUP_LOCATION/${RESTORE_VM}_vm.json
+	echo $new_metadata > $BACKUP_LOCATION/${RESTORE_VM}/vm.json
 	new_vm_disk=$(echo $new_metadata | jq -r '.metadata.disks[0].id')
 	pprint "New vm disk id $new_vm_disk"
-	new_backup_json=$(cat $BACKUP_LOCATION/${RESTORE_VM}_backup.json | jq ".parent_disk = $new_vm_disk")
-       echo "$new_backup_json" > $BACKUP_LOCATION/${RESTORE_VM}_backup.json
+	new_backup_json=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq ".parent_disk = $new_vm_disk")
+       echo "$new_backup_json" > $BACKUP_LOCATION/${RESTORE_VM}/backup.json
        restore_existing	
 }
 restore_vm_backup() {
@@ -154,14 +162,14 @@ restore_vm_backup() {
 ### Start restoring
 pprint "Check if files $RESTORE_VM exists"
 
-if [ -f "$BACKUP_LOCATION/$RESTORE_VM.zst" ] && [ -f "$BACKUP_LOCATION/${RESTORE_VM}_vm.json" ] && [ -f "$BACKUP_LOCATION/${RESTORE_VM}_backup.json" ] && [ -f "$BACKUP_LOCATION/${RESTORE_VM}_config.json" ] ; then
+if [ -f "$BACKUP_LOCATION/$RESTORE_VM/disk.zst" ] && [ -f "$BACKUP_LOCATION/${RESTORE_VM}/vm.json" ] && [ -f "$BACKUP_LOCATION/${RESTORE_VM}/backup.json" ] && [ -f "$BACKUP_LOCATION/${RESTORE_VM}/backup_host.json" ] ; then
 	pprint Ok
 else
 	perror "Can't find files to restore"
 	exit 1
 fi
 
-metadata=$(cat $BACKUP_LOCATION/${RESTORE_VM}_vm.json)
+metadata=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json)
 vm_id=$(echo $metadata | jq -r '.metadata.id')
 
 pprint "Check if VM exists"

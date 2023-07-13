@@ -1,4 +1,10 @@
 #!/bin/bash
+###
+### Backup script for VMmanager 6
+### AO Exo-soft 2023 
+### Author: Kalinichenko Ilya 
+### mailto: i.kalinichenko@ispsystem.com
+###
 
 . ./common.sh
 
@@ -30,6 +36,8 @@ backup_disk_name=$(echo $backup_json | jq -r '.list[-1] | .disk.name')
 backup_path=$(echo $backup_json | jq -r '.list[-1] | .cluster.image_storage_path')
 
 backup_name="${backup_id}_${backup_disk_id}_${backup_disk_name}"
+mkdir -p ${BACKUP_LOCATION}/${backup_name}
+
 backup_file="${backup_path}/${backup_name}_backup"
 backup_type='qcow2'
 if [ -f "${backup_file}.qcow2.zst" ]; then
@@ -39,16 +47,16 @@ else
 fi
 
 pprint "Saving backup config"
-echo $backup_json | jq '. + {type: "'$backup_type'"}' > ${BACKUP_LOCATION}/${backup_name}_config.json
+echo $backup_json | jq '. + {type: "'$backup_type'"}' > ${BACKUP_LOCATION}/${backup_name}/backup_host.json
 
 pprint "Copy $backup_name file to backup location"
-cp -f ${backup_file}.${backup_type}.zst $BACKUP_LOCATION/${backup_name}.zst
-echo ${metadata} > ${BACKUP_LOCATION}/${backup_name}_vm.json
+cp -f ${backup_file}.${backup_type}.zst $BACKUP_LOCATION/${backup_name}/disk.zst
+echo ${metadata} > ${BACKUP_LOCATION}/${backup_name}/vm.json
 
 pprint "Saving backup metadata"
 backup_json=$(get $token "vm/v3/backup/$backup_id")
 check_err "$backup_json"
-echo $backup_json > ${BACKUP_LOCATION}/${backup_name}_backup.json
+echo $backup_json > ${BACKUP_LOCATION}/${backup_name}/backup.json
 
 
 pprint "Done"

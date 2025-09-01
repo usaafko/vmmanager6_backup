@@ -43,6 +43,8 @@ restore_existing() {
         database_type=$(echo $VM_CONFIG | jq -r '.DatabaseType')
         if [ -z "$database_type" ]; then
             perror "Can't get database type from VMmanager config"
+        else
+            pprint "Database type $database_type"
         fi
     fi
     backup_id=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.id') 
@@ -80,6 +82,7 @@ restore_missed() {
     pprint "Getting master configuration"
     VM_CONFIG=$($SSH_COMMAND cat /opt/ispsystem/vm/config.json)
     database_pass=$(echo $VM_CONFIG | jq -r '.MysqlRootPassword')
+    database_type=$(echo $VM_CONFIG | jq -r '.DatabaseType')
     vm_ip=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.ipv4[0].ip_addr')
     vm_ip_pool=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.ipv4[0].ippool_id')
     if [ ! "$vm_ip" = "null" ]; then
@@ -134,8 +137,8 @@ restore_missed() {
     [
         {
             "mac": null,
-"bridge": null,
-"ip_name": "$vm_ip",
+            "bridge": null,
+            "ip_name": "$vm_ip",
             "ip_count": 1
         }
     ],
@@ -144,6 +147,10 @@ restore_missed() {
 EOF
     if [ -n "$new_ip" ]; then
         cat $new_vm_json | jq ".custom_interfaces[0].ippool = $vm_ip_pool | del(.custom_interfaces[0].ip_name) | del(.custom_interfaces[0].bridge)" > $new_vm_json.new
+        mv $new_vm_json.new $new_vm_json
+    fi
+    if [ "$vm_ip" = "null" ]; then
+        cat $new_vm_json | jq ".custom_interfaces[0].no_ip = true | del(.custom_interfaces[0].ip_name) | del(.custom_interfaces[0].bridge)" > $new_vm_json.new
         mv $new_vm_json.new $new_vm_json
     fi
     pprint "Creating new VM..."

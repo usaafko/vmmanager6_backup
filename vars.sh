@@ -17,6 +17,7 @@ VM_PASS='q1w2e3'
 
 # VMmanager 6 master server IP. Please configure SSH access from this node to master by ssh keys
 VM_IP='172.31.49.33'
+VM_SSH_LOGIN='root'
 
 # Directory, where script will store backups
 # In this directory restore.sh will search files to restore 

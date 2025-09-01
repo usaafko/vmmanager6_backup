@@ -9,6 +9,12 @@
 . ./common.sh
 
 RESTORE_VM=$1
+if [ "$VM_SSH_LOGIN" = "root" ]; then
+    SSH_COMMAND="ssh -t root@$VM_IP"
+else
+    SSH_COMMAND="ssh -t ${VM_SSH_LOGIN}@${VM_IP} sudo"
+fi
+
 ask_missed() {
 	read -p "Do you want to create VM and restore from local backup (y/n)?" choice
 	case "$choice" in
@@ -30,10 +36,14 @@ ask_existing() {
 	esac
 }
 restore_existing() {
-	if [ -z "$mysql_pass" ]; then
+	if [ -z "$database_pass" ]; then
 		pprint "Getting master configuration"
-		VM_CONFIG=$(ssh -t root@$VM_IP cat /opt/ispsystem/vm/config.json)
-		mysql_pass=$(echo $VM_CONFIG | jq -r '.MysqlRootPassword')
+		VM_CONFIG=$($SSH_COMMAND cat /opt/ispsystem/vm/config.json)
+		database_pass=$(echo $VM_CONFIG | jq -r '.MysqlRootPassword')
+        database_type=$(echo $VM_CONFIG | jq -r '.DatabaseType')
+        if [ -z "$database_type" ]; then
+            perror "Can't get database type from VMmanager config"
+        fi
 	fi
 	backup_id=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.id') 
 	backup_name=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.name') 
@@ -49,11 +59,17 @@ restore_existing() {
 	backup_state=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.state') 
 	backup_datecreate=$(cat $BACKUP_LOCATION/${RESTORE_VM}/backup.json | jq -r '.date_create') 
 	pprint "Adding backup to VMmanager database..."
-	ssh root@$VM_IP /bin/bash << DOCKER_EOF
+    if [ "$database_type" = "mysql" ]; then
+        $SSH_COMMAND /bin/bash << DOCKER_EOF
 docker exec -i mysql bash << EOF
-MYSQL_PWD=$mysql_pass mysql isp -e "replace into vm_disk_backup(id,name,os,expand_part,ip_automation,parent_disk,estimated_size_mib,actual_size_mib,node,backup_location,schedule,internal_name,state,comment,date_create,available_until) value ($backup_id,'$backup_name',$backup_os,'$backup_expand','$backup_ipauto',$backup_parent,$backup_estimated,$backup_actualsize,$backup_node,null,null,'$backup_internalname','$backup_state','','$backup_datecreate',null)"
+MYSQL_PWD=$database_pass mysql isp -e "replace into vm_disk_backup(id,name,os,expand_part,ip_automation,parent_disk,estimated_size_mib,actual_size_mib,node,backup_location,schedule,internal_name,state,comment,date_create,available_until) value ($backup_id,'$backup_name',$backup_os,'$backup_expand','$backup_ipauto',$backup_parent,$backup_estimated,$backup_actualsize,$backup_node,null,null,'$backup_internalname','$backup_state','','$backup_datecreate',null)"
 EOF
 DOCKER_EOF
+    elif [ "$database_type" = "pgsql" ]; then
+        $SSH_COMMAND /bin/bash << DOCKER_EOF
+docker exec -i pgsql psql isp -c "insert into vm_disk_backup(id,name,os,expand_part,ip_automation,parent_disk,estimated_size_mib,actual_size_mib,node,backup_location,schedule,internal_name,state,comment,date_create,available_until) values ($backup_id,'$backup_name',$backup_os,'$backup_expand','$backup_ipauto',$backup_parent,$backup_estimated,$backup_actualsize,$backup_node,null,null,'$backup_internalname','$backup_state','','$backup_datecreate',null) on conflict(id) do nothing"
+DOCKER_EOF
+    fi
 	pprint "Move local backup to VMmanager storage"
 	backup_type=$(cat "$BACKUP_LOCATION/${RESTORE_VM}/backup_host.json" | jq -r '.type')
         backup_path=$(cat "$BACKUP_LOCATION/${RESTORE_VM}/backup_host.json" | jq -r '.list[-1]|.cluster.image_storage_path')	
@@ -62,8 +78,8 @@ DOCKER_EOF
 }
 restore_missed() {
 	pprint "Getting master configuration"
-	VM_CONFIG=$(ssh -t root@$VM_IP cat /opt/ispsystem/vm/config.json)
-	mysql_pass=$(echo $VM_CONFIG | jq -r '.MysqlRootPassword')
+	VM_CONFIG=$($SSH_COMMAND cat /opt/ispsystem/vm/config.json)
+	database_pass=$(echo $VM_CONFIG | jq -r '.MysqlRootPassword')
 	vm_ip=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.ipv4[0].ip_addr')
 	vm_ip_pool=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.ipv4[0].ippool_id')
 	pprint "Check if IP address $vm_ip is busy"
@@ -83,7 +99,7 @@ restore_missed() {
 	pprint "Address is ready to use"
 	vm_name=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.name')
 	vm_os=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.os.id')
-	vm_pass=$(pwgen -s 20 -1)
+	vm_pass=$(openssl rand -base64 15)
 	vm_cluster=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.cluster.id')
 	vm_preset=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.preset')
 	vm_node=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.node.id')

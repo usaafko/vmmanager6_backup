@@ -62,19 +62,34 @@ test -f /usr/bin/which || apt-get -y install which
 which jq >/dev/null 2>/dev/null || apt-get -y install jq
 which curl >/dev/null 2>/dev/null || apt-get -y install curl
 
-pprint "Get auth token"
+pprint "Get admin auth token"
 
-token_json=$(post '{"email": "'$VM_LOGIN'", "password": "'$VM_PASS'"}' 'auth/v4/public/token')
+token_admin_json=$(post '{"email": "'$VM_ADMIN_LOGIN'", "password": "'$VM_ADMIN_PASS'"}' 'auth/v4/public/token')
 first_login=1
-while echo $token_json | grep -q error 
+while echo $token_admin_json | grep -q error 
 do
 	if [ "$first_login" -gt 1 ]; then
 		perror "Can't login, do another try"
 	fi
 	sleep 5
-	token_json=$(post '{"email": "'$VM_LOGIN'", "password": "'$VM_PASS'"}' 'auth/v4/public/token')
+	token_admin_json=$(post '{"email": "'$VM_ADMIN_LOGIN'", "password": "'$VM_ADMIN_PASS'"}' 'auth/v4/public/token')
 	first_login=2
 done 
 	
-token=$(echo $token_json | jq -r '.token')
+admin_token=$(echo $token_admin_json | jq -r '.token')
 
+pprint "Get advanced user auth token"
+
+token_adv_json=$(post '{"email": "'$VM_ADV_LOGIN'", "password": "'$VM_ADV_PASS'"}' 'auth/v4/public/token')
+first_login=1
+while echo $token_adv_json | grep -q error 
+do
+	if [ "$first_login" -gt 1 ]; then
+		perror "Can't login, do another try"
+	fi
+	sleep 5
+	token_adv_json=$(post '{"email": "'$VM_ADV_LOGIN'", "password": "'$VM_ADV_PASS'"}' 'auth/v4/public/token')
+	first_login=2
+done 
+	
+adv_token=$(echo $token_adv_json | jq -r '.token')

@@ -87,7 +87,7 @@ restore_missed() {
     vm_ip_pool=$(cat $BACKUP_LOCATION/${RESTORE_VM}/vm.json | jq -r '.metadata.ipv4[0].ippool_id')
     if [ ! "$vm_ip" = "null" ]; then
         pprint "Check if IP address $vm_ip is busy"
-        check_ip=$(get $token "ip/v3/ip?where=name%20EQ%20%27${vm_ip}%27")
+        check_ip=$(get $admin_token "ip/v3/ip?where=name%20EQ%20%27${vm_ip}%27")
         check_err "$check_ip"
         if [ $(echo $check_ip | jq -r '.list | length') -ne 0 ]; then
             perror "Ip $vm_ip address is currently occupied or in use."
@@ -154,13 +154,13 @@ EOF
         mv $new_vm_json.new $new_vm_json
     fi
     pprint "Creating new VM..."
-    newvm=$(post "@${new_vm_json}" 'vm/v3/host' $token)
+    newvm=$(post "@${new_vm_json}" 'vm/v3/host' $adv_token)
     check_err "$newvm"
     rm -f $new_vm_json
     vm_id=$(echo $newvm | jq -r '.id')
     while true
     do
-        vm_json=$(get $token "vm/v3/host/$vm_id")
+        vm_json=$(get $admin_token "vm/v3/host/$vm_id")
         check_err "$vm_json"
         if [ "x$(echo $vm_json | jq -r '.state')" = "xactive" ]; then
             break
@@ -168,7 +168,7 @@ EOF
         pprint "Waiting..."
         sleep 5
     done
-    new_metadata=$(get $token "vm/v3/host/$vm_id/metadata")
+    new_metadata=$(get $admin_token "vm/v3/host/$vm_id/metadata")
     check_err "$new_metadata"
     echo $new_metadata > $BACKUP_LOCATION/${RESTORE_VM}/vm.json
     new_vm_disk=$(echo $new_metadata | jq -r '.metadata.disks[0].id')
@@ -179,7 +179,7 @@ EOF
 }
 restore_vm_backup() {
     pprint "Restoring VM id $vm_id from backup id $backup_id"
-    restore=$(post '{"backup":'$backup_id'}' "vm/v3/disk/$backup_disk_id/restore" $token)
+    restore=$(post '{"backup":'$backup_id'}' "vm/v3/disk/$backup_disk_id/restore" $adv_token)
     check_err "$restore"
     pprint "Done, VM will be restored. Please check VMmanager interface"
 }
@@ -199,12 +199,12 @@ vm_id=$(echo $metadata | jq -r '.metadata.id')
 
 pprint "Check if VM exists"
 
-vm_meta=$(get $token "vm/v3/host/$vm_id/metadata")
+vm_meta=$(get $admin_token "vm/v3/host/$vm_id/metadata")
 if echo $vm_meta | grep -qv error; then
     pprint "VM id $vm_id exists"
     pprint "Checking if backup exists in VMmanager"
     backup_id=${RESTORE_VM%%_*}
-    backup_json=$(get $token "vm/v3/backup/$backup_id")
+    backup_json=$(get $admin_token "vm/v3/backup/$backup_id")
     if echo $backup_json | grep -qv error; then
         pprint "Found. Checking backup status"
         backup_status=$(echo $backup_json | jq -r '.state')
